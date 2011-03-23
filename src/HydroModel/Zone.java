@@ -24,7 +24,7 @@ public class Zone {
     	_context = context;
     	_ID = context._maxId;
     	context._maxId++;
-    	_storage= storage;
+    	_storage= (head-bottomElevation)*hArea*sYield;
     	_tempStorage = 0.0;
     	_boundaryFlow = boundaryFlow;
     	_head = head;
