@@ -65,7 +65,7 @@ public class CSSDModel {
 	public void updateZoneFlows(){
 		for (Zone z : _model){
 			for (Integer i : z._neighbours){
-				_zoneFlows[z._ID][i] = (z._head - _zoneLookUp.get(i)._head) *z._neighbourCoefficient.get(i);
+				_zoneFlows[z._ID][i] = (_zoneLookUp.get(i)._head - z._head) *z._neighbourCoefficient.get(i);
 			}
 			
 		}
@@ -78,20 +78,20 @@ public class CSSDModel {
 			_zoneFlows = new Double[_model.size()][_model.size()];
 			updateZoneFlows();
 		}
-		double temp = 0.0;
 		while (numSteps > 0){
-		for (Zone z : _model){
-			for (Integer i : z._neighbours){
-				temp += _zoneFlows[z._ID][i];	//Calculating the value of Qab for all relevant b
+			for (Zone z : _model){
+				double temp = 0.0;
+				for (Integer i : z._neighbours){
+					temp += _zoneFlows[z._ID][i];	//Calculating the value of Qab for all relevant b
+				}
+				z._tempStorage = (z._boundaryFlow+temp)*_timeStep + z._storage;	//Equation 6
 			}
-			z._tempStorage = (z._boundaryFlow+temp)*_timeStep + z._storage;	//Equation 6
-		}
-		for (Zone z : _model){
-			z.update();
-		}
-		updateZoneFlows();
-		System.out.println(toString());
-		numSteps--;
+			for (Zone z : _model){
+				z.update();
+			}
+			updateZoneFlows();
+			System.out.println(toString());
+			numSteps--;
 		}
 	}
 	
