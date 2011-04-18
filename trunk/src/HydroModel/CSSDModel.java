@@ -78,6 +78,7 @@ public class CSSDModel {
 			_zoneFlows = new Double[_model.size()][_model.size()];
 			updateZoneFlows();
 		}
+		
 		while (numSteps > 0){
 			for (Zone z : _model){
 				double temp = 0.0;
@@ -90,7 +91,17 @@ public class CSSDModel {
 				z.update();
 			}
 			updateZoneFlows();
-			System.out.println(toString());
+			
+			for (Zone z : _model){
+				System.out.print(z._head);
+				System.out.print(" ");
+			}
+			for (Zone z : _model){
+				System.out.print(z._storage);
+				System.out.print(" ");
+			}
+			System.out.print("\n");
+			//System.out.println(toString());
 			numSteps--;
 		}
 	}
