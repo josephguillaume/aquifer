@@ -16,11 +16,15 @@ public class test {
 	 *  Transmissivity 75
 	 *  Storativity 2.7e-4
 	 */
+	 
+	     public Zone(CSSDModel context, Double boundaryFlow, Double head, double bottomElevation, double hArea, double sYield){
+    public void addNeighbour(Integer id, Double hContact, Double transmitivity, Double distance){
+
 
 	public static void main(String[] args) {
 		CSSDModel model = new CSSDModel();
-		Zone z1 = new Zone(model, 0.0 /* not needed */, -1.0e3, 58.0 ,0.0 ,4.0e6 ,0.00027 );
-		Zone z2 = new Zone(model, 0.0 /* not needed */, 0.0, 58.0 , 0.0 ,9.6e7 ,0.00027 );
+		Zone z1 = new Zone(model, -1.0e3, 58.0 ,0.0 ,4.0 ,2.7e-4 );
+		Zone z2 = new Zone(model, 0.0, 58.0 , 0.0 ,9.6e7 , 2.7e-4 );
 		z1.addNeighbour(z2._ID, 8000.0, 75.0, 3000.0);
 		//z2.addNeighbour(z1._ID, 8000.0, 75.0, 3000.0); //FIXME: there appears to be no flow from Z2 to Z1?
 		model.step(10);

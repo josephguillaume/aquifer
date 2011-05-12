@@ -20,7 +20,7 @@ public class Zone {
     HashMap<Integer, Double> _neighbourCoefficient;//contains alpha for each of this zones neighbours
     HashMap<Integer, Double> _neighbourFlow;
 	
-    public Zone(CSSDModel context, Double storage, Double boundaryFlow, Double head, double bottomElevation, double hArea, double sYield){
+    public Zone(CSSDModel context, Double boundaryFlow, Double head, double bottomElevation, double hArea, double sYield){
     	_context = context;
     	_ID = context._maxId;
     	context._maxId++;
