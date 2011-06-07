@@ -1,16 +1,16 @@
 package hydrologicalModelling;
 
-import java.awt.Color;
-import java.awt.Graphics;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 
+
+
+//Abstract class for a element of the model. Can be a cell or a zone.
 public abstract class Compartment {
 	
-	int _ID;
+	int _ID;		//Used to identify the compartment within the model
 
-	CSSDModel _context;
+	CSSDModel _context;		//model it is an element of 
 	
 	double _storage;	//Storage at time t
 	double _tempStorage;	//Temporary storage, used when stepping model
@@ -25,9 +25,11 @@ public abstract class Compartment {
         
     HashMap<Integer, Double> _neighbourCoefficient;//contains alpha for each of this zones neighbours
     
-    public abstract void build();
+    public abstract void build();	//Constructs a cell within the model.  Neighbours etc.
     public abstract String toString();
+   
     
+    //Used to impose a coordinate system on the points
     public Integer xCoord(Integer id){
     	if (_context._maxX == 0)
     		return 0;
@@ -50,7 +52,8 @@ public abstract class Compartment {
     }
     
      
-    public void reset(){
+    //Resets the compartment to initial values
+    public void reset(){	
     	_head = _initialHead;
     	_storage= (_head-_bottomElevation)*_hArea*_storativity;	
     }

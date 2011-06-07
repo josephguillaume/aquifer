@@ -1,18 +1,12 @@
 package hydrologicalModelling;
 
-import hydrologicalModelling.*;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
-import java.awt.Image;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 
-import javax.swing.JButton;
 import javax.swing.JComponent;
 
-import java.awt.Toolkit;
 
 /**
  * 
@@ -39,7 +33,11 @@ import java.awt.Toolkit;
  */
 public class SimulationCanvas extends JComponent {
 
-    int xdim, ydim; // the size of the Canvas
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	int xdim, ydim; // the size of the Canvas
     private BufferedImage background;
     private BufferedImage offscreen;
 

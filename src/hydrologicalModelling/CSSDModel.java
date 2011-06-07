@@ -1,6 +1,4 @@
 package hydrologicalModelling;
-import java.awt.Color;
-import java.awt.Graphics;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -10,45 +8,62 @@ import java.util.HashMap;
 
 
 public class CSSDModel {
+	
+	//Used for drawing the model
 	final int _maxX, _maxY, _maxZ;
 	final int _windowX = 600;
 	final int _windowY = 600;
 	final Integer _xOffset = 50;
 	final Integer _yOffset = 50;
-	private final double _timeStep = 10.0; 
-	final Integer _numSteps = 100;
-	Timer timer = new Timer();
-	//Final Values.  Used for debugging, printing.
-	
 	final Integer _xScale; 
-	final Integer _yScale; 
- 
-
-	
-
+	final Integer _yScale;
 	double _maxHead = 0.0;
 	double _maxStorage = 0.0;
 	
+	//Time step of the model.
+	private final double _timeStep = 10.0;
 	
+	//Number of timpsteps the model runs for
+	Integer _numSteps = 100;
+	
+	//Number of iterations in the optimisation process
+	private Integer _numIterations = 1;
+
+	
+	//Used for timing
+	Timer timer = new Timer();
+	
+	//Time to run high resolution model
+	long initialTime;
+
+
+	
+	//Debugging purpose
 	private final Boolean PRINT = false;
 
 	
-	
+	//Contains head/storage values for each cell in high resolution model
 	Double[][][] _headBenchmark;
 	private Double[][][] _storageBenchmark;
 	
-	Double _optimalHeadError;
-	Double _optimalStorageError;
-	ArrayList<Zone> _optimalSolution;
 	
-	private Integer _numIterations = 100;
+	//"" for optimised zone model
+	Double[][][] _optimalHeadError;
+	Double[][][] _optimalStorageError;
 	
-	ArrayList<Double> _firstHeadError;
-	ArrayList<Double> _firstStorageError;
+	// "" for initial zone assignation
+	Double[][][] _firstHeadError;
+	Double[][][] _firstStorageError;
+	
+	//List of difference between initial and optimised zones
+	ArrayList<Double> _headImprovement;
+	ArrayList<Double> _storageImprovement;
 	
 	Integer _numZones; //Number of zones currently.
 	Integer _baseSize; //Number of cells
 	
+	
+	//Used in optimisation
 	ArrayList<Integer> _searchOrder;
 	
 	HashSet<Integer> _zoneIDList;
@@ -63,11 +78,10 @@ public class CSSDModel {
 	
 	HashMap<Integer, Integer> _zoneIDLookUp;
 	Double[][] _zoneFlows; //Square matrix containing the flows from zone i to zone j.
-	Double[][] _initialZoneFlows;
 	final Double[][] _baseZoneFlows;
 
 	
-	
+	//Constructs a high resolution model from list of arrays
 	CSSDModel(double[][][] head, double[][][] bottomElevation, double[][][] hArea, double[][][] storativity, double[][][] boundaryFlow, double[][][] transmitivity){
 	_maxId = 0;
 	_model = new ArrayList<Compartment>();
@@ -76,9 +90,10 @@ public class CSSDModel {
 	_zoneIDtoID = new HashMap<Integer, Integer>();
 	_zoneIDLookUp = new HashMap<Integer, Integer>();
 	_zIDLookUp = new HashMap<Integer, Compartment>();
+	_headImprovement = new ArrayList<Double>();
+	_storageImprovement = new ArrayList<Double>();
 	
 
-	Cell temp;
 	_maxX = head.length;
 	_maxY = head[0].length;
 	_maxZ = head[0][0].length;
@@ -88,27 +103,39 @@ public class CSSDModel {
 	_baseSize = _maxX * _maxY * _maxZ;
 	_headBenchmark = new Double[_maxX][_maxY][_maxZ];
 	_storageBenchmark = new Double[_maxX][_maxY][_maxZ];
+	_firstHeadError = new Double[_maxX][_maxY][_maxZ];
+	_firstStorageError = new Double[_maxX][_maxY][_maxZ];
+	_optimalHeadError = new Double[_maxX][_maxY][_maxZ];
+	_optimalStorageError = new Double[_maxX][_maxY][_maxZ];
 
 	for (int z = 0; ((z < _maxZ) || (z ==0)); z++){
 		for (int y = 0; y < _maxY; y++){
 			for (int x =0; x < _maxX; x ++){
 				_maxHead = Math.max(head[x][y][z], _maxHead);
-				temp = new Cell(this, boundaryFlow[x][y][z], head[x][y][z], bottomElevation[x][y][z], hArea[x][y][z], storativity[x][y][z], transmitivity[x][y][z]);
+				new Cell(this, boundaryFlow[x][y][z], head[x][y][z], bottomElevation[x][y][z], storativity[x][y][z], transmitivity[x][y][z]);
 			}
 		}
 	}
-	
+	//Builds neighbours for each cell
 	for (int i = 0; i < _maxId; i ++){
 		_zoneLookUp.get(i).build();
 	}
 	_baseZoneFlows = new Double[_model.size()][_model.size()];
+	//Constructs the zone flows matrix
 	for (Compartment m : _model){
 		for (Integer i : m._neighbours){
 				_baseZoneFlows[m._ID][i] = ( _zoneLookUp.get(i)._head - m._head) *m._neighbourCoefficient.get(i);			
 		}
 	}
 	
+	//Stores time to run the base model
+	timer.ResetTimer();
 	run();
+	timer.StopTimer();
+	initialTime = timer._lElapsedTime;
+	
+	
+	//stores values from running the base model, for comparison 
 	for (int z = 0; (z < _maxZ || z == 0) ; z++){
 		for (int y = 0; y < _maxY; y++){
 			for (int x =0; x < _maxX; x ++){
@@ -128,62 +155,96 @@ public class CSSDModel {
 	 * Zone methods.  
 	 */
 	
+	
+	//Optimises a given assignation of zone id's
 	public void optimise(Integer[][][] zoneIDs){
-		
+		timer.ResetTimer();
 		assignZones(zoneIDs);
 		aggregateZones();
-		int called = 0;
 		buildZones();
-		//System.out.println(_model);
-		//run(false);
-		
-		//_firstHeadError = compareHead();
-		//_firstStorageError = compareStorage();
+		run();
+		//calculates error for initial zones
+		for (int z = 0; (z < _maxZ || z == 0) ; z++){
+			for (int y = 0; y < _maxY; y++){
+				for (int x =0; x < _maxX; x ++){
+					_firstHeadError[x][y][z] = Math.abs(_headBenchmark[x][y][z] - _zoneLookUp.get(id(x,y,z))._head);
+					_firstStorageError[x][y][z] = Math.abs(_storageBenchmark[x][y][z] - _zoneLookUp.get(id(x,y,z))._storage);	
+				}
+			}
+		}
+		reset();
 
-	
-		//reset(false);
 		
 		_searchOrder = new ArrayList<Integer>();
-		_searchOrder.addAll((Collection)_zoneIDList);
+		_searchOrder.addAll((Collection<Integer>)_zoneIDList);
 		Integer current = _searchOrder.get(0);
 		Integer next = _searchOrder.get(0);
 		while (_numIterations > 0){
 			current = next;
-			((Zone)_zIDLookUp.get(current)).optimise(_searchOrder);
+			((Zone)_zIDLookUp.get(current)).optimise();	//optimises the current zone
 			_searchOrder.remove((Object) current);
-			_searchOrder.add(current);
-			if (!_context._zIDLookUp.get(current)._neighbours.isEmpty())
-				next = ((Zone)_context._zIDLookUp.get(current)).nextNeighbour(_searchOrder); //Dynamic NEighbourhood search.  Very basic. 
-			else 
-				next = _searchOrder.get(_searchOrder.size()-1);
-			aggregateZones();
+			_searchOrder.add(current);			//puts the optimises zone to the back of the search order
+			next = _searchOrder.get(0);				// next zone to be optimised is the one done longest ago
+			aggregateZones();		
 			buildZones();
 			_numIterations--;
 		}
-		timer.ResetTimer();
 		for (Compartment m : _model){
-			connectZone(((Zone)m)._elements);
+			connectZone(((Zone)m)._elements);		//ensure each zone is contiguous. 
 		}
-		timer.StopTimer();
+		
 		aggregateZones();
 		buildZones();
-		flushCache();
+		flushCache();		//Flushes the cache out, removing any intermediary zones
+		timer.StopTimer();
+		System.out.println("Optimisation Time " + timer._lElapsedTime + " milliseconds");
+		timer.ResetTimer();
+		run();
+		timer.StopTimer();
+		long zoneTime = timer._lElapsedTime;
+		for (int z = 0; (z < _maxZ || z == 0) ; z++){
+			for (int y = 0; y < _maxY; y++){
+				for (int x =0; x < _maxX; x ++){
+					_optimalHeadError[x][y][z] = Math.abs(_headBenchmark[x][y][z] - _zoneLookUp.get(id(x,y,z))._head);
+					_optimalStorageError[x][y][z] = Math.abs(_storageBenchmark[x][y][z] - _zoneLookUp.get(id(x,y,z))._storage);	
+				}
+			}
+		}
+		reset();
+		
+		for (int z = 0; (z < _maxZ || z == 0) ; z++){
+			for (int y = 0; y < _maxY; y++){
+				for (int x =0; x < _maxX; x ++){
+					_headImprovement.add((Math.abs((_headBenchmark[x][y][z] - _firstHeadError[x][y][z])/ _headBenchmark[x][y][z]*100) - Math.abs((_headBenchmark[x][y][z] - _optimalHeadError[x][y][z]))/ _headBenchmark[x][y][z]*100) ); //= Math.abs(_headBenchmark[x][y][z] - _zoneLookUp.get(id(x,y,z))._head);
+					_storageImprovement.add((Math.abs((_storageBenchmark[x][y][z] - _firstStorageError[x][y][z])/ _storageBenchmark[x][y][z]*100) - Math.abs((_storageBenchmark[x][y][z] - _optimalStorageError[x][y][z]))/ _storageBenchmark[x][y][z]*100) ); //= Math.abs(_headBenchmark[x][y][z] - _zoneLookUp.get(id(x,y,z))._head);
+				}
+			}
+		}
+		
+		System.out.println(_headImprovement);
+		System.out.println(_storageImprovement);
+		double _headimprov = 0.0;
+		double _storageimprov = 0.0;
+		for (int i = 0; i < _headImprovement.size(); i++){
+			if (!_headImprovement.get(i).isNaN())
+				_headimprov += _headImprovement.get(i);
+			if (!_storageImprovement.get(i).isNaN())
+				_storageimprov += _storageImprovement.get(i);
+		}
+		System.out.println("Head improvement " + _headimprov);
+		System.out.println("Storage improvement " + _storageimprov);
+		System.out.println("Time Improvement " + (initialTime - zoneTime) );
+		
+
 	}
 	
-	
+	//Checks that a given list of elements is "connected".  If not, breaks it up into separate zones.
 	 public void connectZone(ArrayList<Integer> elements){
-		 	Boolean test = false;
-			ArrayList<Integer> temporary = (ArrayList<Integer>) elements.clone();
 			ArrayList<Integer> current = new ArrayList<Integer>();
 			if (elements.size() == 0){
-				test = true;
-			return;
+				return;
 			}
 			if (elements.size() >1 ){
-				Integer temp;
-				Cell tempZone;
-				ArrayList<Integer> temp1;
-				Iterator itr = elements.iterator();
 				current.add(elements.get(0));
 				current = pathConnected(elements.get(0), new ArrayList<Integer>());
 				if (current.size() == elements.size()){
@@ -205,22 +266,7 @@ public class CSSDModel {
 			
 	}
 
-	 public static Boolean containsNegative(ArrayList<Integer> blah){
-			ArrayList<Integer> negatives = new ArrayList<Integer>();
-			Iterator<Integer> itr = blah.iterator();
-			Boolean t = false;
-			while (itr.hasNext()){
-					Integer temp = itr.next();
-					if (temp < 0){
-						t = true;
-						itr.remove();
-						negatives.add(-temp);
-					}
-			}
-			blah.addAll(negatives);
-			return t;
-		}
-	 
+	//Returns the sub-list of temporary of elements that are connected to i 
 	public ArrayList<Integer> pathConnected(Integer i, ArrayList<Integer> temporary){
 		ArrayList<Integer> result = new ArrayList<Integer>();
 		result.add(i);
@@ -239,47 +285,10 @@ public class CSSDModel {
 			
 		}
 		timer.StopTimer();
-		//System.out.println(timer._lElapsedTime);
-		//System.out.println(result);
 		return result;
 	}
 
-	public Boolean connected(Integer i, ArrayList<Integer> connected){
-		Compartment temp = _context._zoneLookUp.get(i);
-		for (Integer j : temp._neighbours){
-			if (connected.contains(j)){
-				return true;
-			}
-			
-			//System.out.println(i + " NOT CONNECTED TO " + j);
-		}
-		return false;
-	}
-	
-	public Boolean isConnected(ArrayList<Integer> elements){
-		for (Integer i : elements){
-			if (!connected(i, elements)){
-				return false;
-			}
-		}
-		return true;
-	}
-	
-	public void optimiseAndCompare(Integer[][][] zoneIDs){
-		optimise(zoneIDs);
-		run();
-		ArrayList<Double> headError = compareHead();
-		ArrayList<Double> storageError = compareStorage();
-		reset();
-		for (int i = 0; i< _baseSize; i++){
-			System.out.println("Head Improvement: " + (_firstHeadError.get(i) - headError.get(i)));
-		}
-
-			
-	}
-	
-	
-	
+	//Flushes out all the hashmaps.  Saves memory.
 	public void flushCache(){
 		ArrayList<Compartment> keep = new ArrayList<Compartment>();
 		for (Compartment m : _model){
@@ -309,6 +318,8 @@ public class CSSDModel {
 		
 	}
 
+	
+	//Assigns each cell in high resolution model the corresponding zoneID
 	public void assignZones(Integer[][][] zoneID){
 		_zoneIDList = new HashSet<Integer>();
 		_maxZone=0;
@@ -327,7 +338,7 @@ public class CSSDModel {
 	
 	
 	
-	
+	//Builds the new zones by aggregating cells with same zoneID.  Note zone here is only a list of elements
 	public void aggregateZones(){
 		_model.clear();
 		ArrayList<Integer> unassigned = new ArrayList<Integer>();
@@ -337,7 +348,7 @@ public class CSSDModel {
 		for (int i = 0; i < _baseSize; i++)
 			unassigned.add(i);
 		for (Integer i : _zoneIDList){
-			Iterator itr = unassigned.iterator();
+			Iterator<Integer> itr = unassigned.iterator();
 			temp = new ArrayList<Integer>();
 			while (itr.hasNext()){
 				k = (Integer)itr.next();
@@ -351,6 +362,7 @@ public class CSSDModel {
 		}
 	}
 	
+	//Builds up each zone from the list of elements.  
 	public void buildZones(){
 		_maxHead = 0.0;
 		for (int i : _zoneIDList){
@@ -423,7 +435,7 @@ public class CSSDModel {
 		timer.ResetTimer();
 		step(_numSteps, PRINT);
 		timer.StopTimer();
-		System.out.println(timer._lElapsedTime + "milliseconds");
+		System.out.println("Time to run base model" + timer._lElapsedTime + "milliseconds");
 	}
 	
 	public void step(Integer numSteps, Boolean print){
@@ -444,18 +456,15 @@ public class CSSDModel {
 				}
 				m._tempStorage = (m._boundaryFlow+temp)*_timeStep + m._storage;	//Equation 6
 				m.update();
-			//	System.out.println(m._ID + "  " + _maxStorage);
 				_maxStorage += Math.abs(m._storage/100000);
-			//	System.out.println(m._storage/100000 + "  " + _maxStorage);
 			}
 			updateZoneFlows();
 			if (print)
 				print();
-		//	 System.out.println("----------------------------------------");
 		}
 	
 	
-	
+	//Comparison methods, that arent currently used.
 	public void compareZones(){
 		for (Compartment m : _model){
 			if (m instanceof Cell){
@@ -570,7 +579,6 @@ public class CSSDModel {
 	 */
 	
 	 public void draw(SimulationCanvas canvas) { 
-			Graphics g = canvas.getOffscreenGraphics();
 			for (Compartment m : _model){
 				m.draw(canvas);
 			}

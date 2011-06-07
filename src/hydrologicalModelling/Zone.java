@@ -2,21 +2,18 @@ package hydrologicalModelling;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Random;
 import java.awt.Color;
 import java.awt.Graphics;
 
 
 public class Zone extends Compartment {
 	
-	ArrayList<Integer> _elements;
-    HashSet<Integer> _neighbourCells;
-    
+	ArrayList<Integer> _elements;		//List of elements in this zone
+    HashSet<Integer> _neighbourCells;	//List of cells that border this zone
+    	
     
     HashMap<Integer, Double> _boundary;
 	
-    int _timeSinceRun = 0;
     /**
 	 *@Constructors
 	 */
@@ -53,7 +50,7 @@ public class Zone extends Compartment {
 	
     public String toString(){
     	if (_elements != null){
-    	return ("ID: " + _ID + " Neighbours: " + _neighbours.toString() + " Elements " + _elements.toString());// " Head: " + _head + " Storage: " + _storage + " Neighbour Coefficients: " + _neighbourCoefficient.toString() + " Constants "  + " " + _hArea + " " + _storativity +  "\n"); 
+    	return (" ID: " + _ID + " " +  ((double)((int)(_head*100)))/10 + " " + (double)((int)(_storage*100))/100 + " "); // + " Neighbour Coefficients: " + _neighbourCoefficient.toString() + " Constants "  + " " + _hArea + " " + _storativity +  "\n"); 
     	}
     	else
         	return ("ID: " + _ID); //"Head " + _head);// " ZoneID " + _ZoneID + " Neighbours: " + _neighbours.toString() ); //" Elements " + _elements.toString());// " Head: " + _head + " Storage: " + _storage + " Neighbour Coefficients: " + _neighbourCoefficient.toString() + " Constants "  + " " + _hArea + " " + _storativity +  "\n"); 
@@ -62,16 +59,17 @@ public class Zone extends Compartment {
 
 
     
-    
+    //Returns true if the values of this zone and element are closer than the current zone of the cell
     public Boolean compare(Cell element){
     	return (difference(element, this) < difference(element, ((Zone)_context._zIDLookUp.get(element._zoneID))));
     }
     
+    //Returns the difference between head, storativity and bottom elevation of a cell and a zone
     public Double difference(Cell element, Zone zone1){
-    //	return (Math.abs(element._initialHead - zone1._initialHead));
-    	if (zone1._elements.contains(element._ID))
+    	if (zone1._elements.contains(element._ID)){
     		return (Math.abs(element._initialHead - zone1._initialHead) + 2*Math.abs(element._storativity - zone1._storativity) + Math.abs(element._bottomElevation - zone1._bottomElevation));
-    	else {
+    	}
+    		else {
     		Integer size = zone1._elements.size();
     		return (Math.abs( element._initialHead - ((zone1._initialHead*size + element._initialHead)/(size+1)))  + 
     				2*Math.abs(element._storativity - ((zone1._storativity*size+element._storativity) / (size+1))) + 
@@ -81,16 +79,15 @@ public class Zone extends Compartment {
    
     
     //Change to take into account possible stability check / condition?
-    public void optimise(ArrayList<Integer> searchOrder){
+    public void optimise(){
     	Cell temp;
     	for (Integer i : _neighbourCells){
     		temp = _context._zoneLookUp.get(i); 
-    		if (compare(temp)){
+    		if (compare(temp)){						//If values are closer to this zone, put it in this zone
     			temp._zoneID = _ID;	
     			_context._zoneIDLookUp.put(i, _ID);
     		}
     	}
-    	//connectZone(_elements);
 
     }
     
@@ -107,6 +104,7 @@ public class Zone extends Compartment {
      * 
      */
     
+    //Initialises values based on values of elements.
     public void build(){
     	Cell temp;
     	Integer size = _elements.size();
@@ -124,12 +122,16 @@ public class Zone extends Compartment {
     	_storativity /= size;
     	_storage= (_head-_bottomElevation)*_hArea*_storativity;
     	_tempStorage = 0.0;
+    	for (int i : _elements){
+    		System.out.println(_head - _context._zoneLookUp.get(i)._head);
+    	}
     	_context._maxHead = Math.max(_head, _context._maxHead );
     	_neighbourCells = new HashSet<Integer>();
     	
     	
     }
     
+    //Builds the zone neighbours by searching through the neighbours of each cell
     public void buildNeighbours(){
     	Cell temp;
     for (Integer i : _elements){
@@ -150,7 +152,7 @@ public class Zone extends Compartment {
     }
     
     
-    
+    //Calculates the neighbour coefficient for each neighbour by using flow and head difference
     public void buildZoneNeighbourCoefficients(){
     	_neighbourCoefficient = new HashMap<Integer, Double>();
     	double tempCoefficient;
@@ -175,6 +177,7 @@ public class Zone extends Compartment {
     	updateElements();
 	}
     
+    //Updates each element so values have current value of this zone
     public void updateElements(){
     	for (int i : _elements){
     		_context._zoneLookUp.get(i)._head = _head;
@@ -182,6 +185,7 @@ public class Zone extends Compartment {
     	}
     }
     
+    //For each element, prints the difference in head between the zone and the element
     public void compareZone(){
     	for (int i : _elements){
     		Cell z = _context._zoneLookUp.get(i);
@@ -204,9 +208,34 @@ public class Zone extends Compartment {
     public void draw(SimulationCanvas canvas) { 
 
 		Graphics g = canvas.getOffscreenGraphics();
-		Random r = new Random();
-		//g.setColor(new Color(r.nextFloat(), r.nextFloat(), r.nextFloat()));
+		
+		//Color currently set based on proportion of totel water currently in this zone
+		//Problem: For large zones, each is close to 0
 		g.setColor(new Color( (float)0.0, (float)0.4, (float)1.0,(1-((float)_context._maxStorage - (float)_storage/100000)/((float)_context._maxStorage))));
+		/**if (_ID == 0){
+			g.setColor(Color.BLACK);
+		}
+		if (_ID == 1){
+			g.setColor(Color.BLUE);
+		}
+		if (_ID == 2){
+			g.setColor(Color.CYAN);
+		}
+		if (_ID == 3){
+			g.setColor(Color.GREEN);
+		}
+		if (_ID == 4){
+			g.setColor(Color.MAGENTA);
+		}
+		if (_ID == 5){
+			g.setColor(Color.YELLOW);
+		}
+		if (_ID == 6){
+			g.setColor(Color.PINK);
+		}
+		if (_ID == 7){
+			g.setColor(Color.RED);
+		}**/
 		for (Integer i : _elements){
 			g.fillRect(_context._xScale*xCoord(i) + _context._xOffset, _context._yScale*yCoord(i) + _context._yOffset, _context._yScale, _context._xScale);
 		}
@@ -215,20 +244,6 @@ public class Zone extends Compartment {
 			g.drawRect(_context._xScale*xCoord(i) + _context._xOffset, _context._yScale*yCoord(i) + _context._yOffset, _context._yScale, _context._xScale);
 
 		}
-		g.setColor(Color.BLACK);
-		for (Integer i : _elements){
-			//g.drawString((i + " " +_ID), _context._xScale*xCoord(i) + _context._xOffset, _context._yScale*yCoord(i)+_context._yOffset+_context._yScale/2);
-		}
-		
     }
-    
-	public Integer nextNeighbour(ArrayList<Integer> order){
-		Integer ret = _neighbours.get(0);
-		for (Integer i : _neighbours){
-			if ( (order.indexOf((Object) ret)) > (order.indexOf((Object) i)))
-					ret = i;
-		}
-		return ret;
-	}
    
 }
